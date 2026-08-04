@@ -12,8 +12,6 @@ services:
       MYSQL_PASSWORD: app_pass
     ports:
       - "3307:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
 
   app:
     build:

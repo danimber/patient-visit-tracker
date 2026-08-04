@@ -1,0 +1,142 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1-create-doctor
+      author: danil
+      changes:
+        - createTable:
+            tableName: doctor
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: first_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: timezone
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 2-create-patient
+      author: danil
+      changes:
+        - createTable:
+            tableName: patient
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: first_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 3-create-visit
+      author: danil
+      changes:
+        - createTable:
+            tableName: visit
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: start_date_time
+                  type: DATETIME(6)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: end_date_time
+                  type: DATETIME(6)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: patient_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_visit_patient
+                    references: patient(id)
+              - column:
+                  name: doctor_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_visit_doctor
+                    references: doctor(id)
+
+  - changeSet:
+      id: 4-indexes
+      author: danil
+      changes:
+        - createIndex:
+            indexName: idx_visit_doctor_time
+            tableName: visit
+            columns:
+              - column:
+                  name: doctor_id
+              - column:
+                  name: start_date_time
+        - createIndex:
+            indexName: idx_visit_patient_doctor
+            tableName: visit
+            columns:
+              - column:
+                  name: patient_id
+              - column:
+                  name: doctor_id
+        - createIndex:
+            indexName: idx_visit_doctor_patient
+            tableName: visit
+            columns:
+              - column:
+                  name: doctor_id
+              - column:
+                  name: patient_id
+        # Backs the case-insensitive name search filter.
+        - createIndex:
+            indexName: idx_patient_name
+            tableName: patient
+            columns:
+              - column:
+                  name: first_name
+              - column:
+                  name: last_name
+
+  - changeSet:
+      id: 5-seed-test-data
+      author: danil
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/seed-test-data.sql
+            relativeToChangelogFile: false
+            splitStatements: true
+            stripComments: true

@@ -5,18 +5,15 @@ import com.imber.patientvisittracker.dto.response.PatientDto;
 import com.imber.patientvisittracker.dto.response.PatientListResponse;
 import com.imber.patientvisittracker.dto.response.PatientVisitDto;
 import com.imber.patientvisittracker.repository.PatientQueryRepository;
-import com.imber.patientvisittracker.repository.projection.LastVisitRow;
-import com.imber.patientvisittracker.repository.projection.PatientPageResult;
-import com.imber.patientvisittracker.repository.projection.PatientRow;
+import com.imber.patientvisittracker.repository.projection.PatientQueryRow;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 public class PatientQueryService {
@@ -28,49 +25,33 @@ public class PatientQueryService {
     }
 
     public PatientListResponse findPatients(String search, List<Long> doctorIds, int page, int size) {
-        PatientPageResult patientPage = repository.findPatientPage(search, doctorIds, page, size);
+        List<PatientQueryRow> rows = repository.findPatients(search, doctorIds, page, size);
 
-        if (patientPage.patients().isEmpty()) {
-            return new PatientListResponse(List.of(), patientPage.totalCount());
+        if (rows.isEmpty()) {
+            return new PatientListResponse(List.of(), 0);
         }
 
-        List<Long> patientIds = patientPage.patients().stream().map(PatientRow::id).toList();
+        Long totalCount = rows.getFirst().totalCount();
 
-        List<LastVisitRow> lastVisits = repository.findLastVisits(patientIds, doctorIds);
+        Map<Long, PatientDto> patientsById = new LinkedHashMap<>();
+        Map<Long, List<PatientVisitDto>> visitsByPatientId = new LinkedHashMap<>();
 
-        Set<Long> involvedDoctorIds = lastVisits.stream()
-                .map(LastVisitRow::doctorId)
-                .collect(Collectors.toSet());
-        Map<Long, Integer> totalPatientsByDoctor = repository.findTotalPatientsByDoctor(involvedDoctorIds);
+        for (PatientQueryRow row : rows) {
+            visitsByPatientId.computeIfAbsent(row.patientId(), id -> new ArrayList<>());
 
-        Map<Long, List<LastVisitRow>> visitsByPatient = lastVisits.stream()
-                .collect(Collectors.groupingBy(LastVisitRow::patientId, LinkedHashMap::new, Collectors.toList()));
+            patientsById.computeIfAbsent(row.patientId(), id ->
+                new PatientDto(row.patientFirstName(), row.patientLastName(), visitsByPatientId.get(id)));
 
-        List<PatientDto> patientDtos = patientPage.patients().stream()
-                .map(row -> toPatientDto(row, visitsByPatient.getOrDefault(row.id(), List.of()), totalPatientsByDoctor))
-                .toList();
+            if (row.doctorId() != null) {
+                ZoneId doctorZone = ZoneId.of(row.doctorTimezone());
+                visitsByPatientId.get(row.patientId()).add(new PatientVisitDto(
+                    LocalDateTime.ofInstant(row.visitStart(), doctorZone).toString(),
+                    LocalDateTime.ofInstant(row.visitEnd(), doctorZone).toString(),
+                    new DoctorSummaryDto(row.doctorFirstName(), row.doctorLastName(), row.doctorTotalPatients())
+                ));
+            }
+        }
 
-        return new PatientListResponse(patientDtos, patientPage.totalCount());
-    }
-
-    private PatientDto toPatientDto(PatientRow patient,
-                                     List<LastVisitRow> visits,
-                                     Map<Long, Integer> totalPatientsByDoctor) {
-        List<PatientVisitDto> visitDtos = visits.stream()
-                .map(v -> {
-                    ZoneId doctorZone = ZoneId.of(v.doctorTimezone());
-                    return new PatientVisitDto(
-                            LocalDateTime.ofInstant(v.start(), doctorZone).toString(),
-                            LocalDateTime.ofInstant(v.end(), doctorZone).toString(),
-                            new DoctorSummaryDto(
-                                    v.doctorFirstName(),
-                                    v.doctorLastName(),
-                                    totalPatientsByDoctor.getOrDefault(v.doctorId(), 0)
-                            )
-                    );
-                })
-                .toList();
-
-        return new PatientDto(patient.firstName(), patient.lastName(), visitDtos);
+        return new PatientListResponse(List.copyOf(patientsById.values()), totalCount);
     }
 }
